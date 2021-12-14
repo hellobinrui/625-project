@@ -28,8 +28,8 @@ d$PrecipitationIn = as.numeric(d$PrecipitationIn)
 d$PrecipitationIn[which(d$PrecipitationIn==0)] = 0
 d$PrecipitationIn[which(d$PrecipitationIn!=0)] = 1
 d = d %>% dplyr::filter(!is.na(d$PrecipitationIn))
-d = d%>% select(-c("Events", "Date"))
-mon = months(as.Date(weather$Date))
+d = d%>% select(-c("Events"))
+mon = months(as.Date(d$Date))
 season = ifelse(mon %in% c("April", "May", "March"), "Spring", 
                 ifelse(mon %in% c("July","August", "June"), "Summer",
                 ifelse(mon %in% c("September", "October", "Novermber"), "Autumn",
@@ -45,6 +45,7 @@ tempData=mice(data_to_change,m=5,meth="pmm",seed=500)
 data5=complete(tempData,5)
 d=bind_cols(data_unchange,data5)
 # begin with the data saved before
+data$season = season
 write.csv(data, "625-data.csv")
 data = read.csv("625-data.csv")
 data$PrecipitationIn = as.factor(data$PrecipitationIn)
@@ -55,6 +56,7 @@ data$state = f(data$AirPtCd)
 data$state = as.factor(data$state)
 data$prep = as.factor(data$prep)
 data$AirPtCd = as.factor(data$AirPtCd)
+data$season = as.factor(data$season)
 #EDA
 library(ggplot2)
 gather(data[,1:10], key = 'variable', value = 'value', -c('prep'))%>% ggplot() +
@@ -96,7 +98,7 @@ library(rpart.plot)
 library(rattle)
 
 # CART
-tree11 = rpart(prep~., train, parms = list(split = "gini"), method="class",cp=0.013)
+tree11 = rpart(prep~., train[,-23], parms = list(split = "gini"), method="class",cp=0.013)
 plotcp(tree11) 
 fancyRpartPlot(tree11)
 test.pred=predict(tree11, test,type="class")
@@ -115,7 +117,7 @@ prop = table(train$prep) / dim(train)[1]
 w = rep(1/prop[1], dim(train)[1])
 w[which(train$prep== 1)] = 1/prop[2]
 #CART with weights
-tree11.balance = rpart(prep~., train, parms = list(split = "gini"), method="class",cp=0.0085,weights = w)
+tree11.balance = rpart(prep~.-state, train, parms = list(split = "gini"), method="class",cp=0.0085,weights = w)
 plotcp(tree11.balance)
 fancyRpartPlot(tree11.balance)
 test.pred=predict(tree11.balance, test,type="class") 
@@ -132,7 +134,8 @@ auc@y.values  # 0.8104677
 
 #random forest
 library(randomForest)
-rf_prep = randomForest(prep ~ ., data = train, mtry = floor(sqrt(21)),
+
+rf_prep = randomForest(prep ~., data = train[,-23], mtry = floor(sqrt(21)),
                        importance = TRUE)
 importance(rf_prep)[1:15,]
 varImpPlot(rf_prep,n.var=10)
